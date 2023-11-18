@@ -157,6 +157,8 @@ public class Token {
                 return "&lt;";
             case '>':
                 return "&gt;";
+            case '&':
+                return "&amp;";
             default:
                 return String.valueOf(symbol);
         }
