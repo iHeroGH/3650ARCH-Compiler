@@ -5,23 +5,20 @@ public class JackAnalyzer {
 
     public static void main(String[] args){
 
-        String filePath = "ArrayTest\\Main.jack";
+        String filePath = "Square\\Square.jack";
         JackTokenizer tokenizer = new JackTokenizer(filePath);
+        CompilationEngine compiler = new CompilationEngine(tokenizer);
 
-        writeToFile(tokenizer);
-
-        // CompilationEngine compiler = new CompilationEngine(tokenizer);
+        writeToFile(compiler);
     }
 
-    public static void writeToFile(JackTokenizer tokenizer){
+    public static void writeToFile(CompilationEngine compiler){
         try {
             PrintWriter writer = new PrintWriter("a.xml");
-            writer.println("<tokens>");
             // Write all the data from the contents list to the file
-            for(Token token : tokenizer.getTokens()){
+            for(Token token : compiler.getTokens()){
                 writer.println(token.toString());
             }
-            writer.println("</tokens>");
 
             writer.close();
         } catch (FileNotFoundException e){

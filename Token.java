@@ -29,6 +29,10 @@ public class Token {
     private int intVal;
     private String stringVal;
 
+    private boolean isCompiled = false;
+    private NonTerminal nonTerminalToken;
+    private boolean ending;
+
     public Token(String keyword){
         // The keyword given must be lowercase, but the names of the enum
         // is UPPERCASE, and I didn't want to manually change all the cases to
@@ -119,7 +123,9 @@ public class Token {
 
         if(identOrStr){
             this.tokenType = TokenType.IDENTIFIER;
-            if(Character.isDigit(inpString.charAt(0))){
+            if(
+                Character.isDigit(inpString.charAt(0)) |
+                    !inpString.matches("[a-zA-Z0-9_]+")){
                 throw new RuntimeException(
                     "Invalid Identifier " + inpString
                 );
@@ -133,8 +139,20 @@ public class Token {
     }
 
     public Token(int intVal){
+        if (intVal < 0 | intVal > 32_767){
+            throw new RuntimeException(
+                "Invalid Integer Constant " + intVal
+            );
+        }
+
         this.tokenType = TokenType.INT_CONST;
         this.intVal = intVal;
+    }
+
+    public Token(NonTerminal nonTerminalToken, boolean ending){
+        this.nonTerminalToken = nonTerminalToken;
+        this.ending = ending;
+        this.isCompiled = true;
     }
 
     public TokenType getTokenType(){
@@ -170,6 +188,17 @@ public class Token {
     }
 
     public String toString(){
+        if (isCompiled){
+            String tokenString = nonTerminalToken + ">";
+            if (!ending){
+                tokenString = "<" + tokenString;
+            } else {
+                tokenString = "</" + tokenString;
+            }
+
+            return tokenString;
+        }
+
         switch (this.tokenType){
 
             case KEYWORD:
@@ -205,8 +234,7 @@ enum TokenType {
 }
 
 enum KeywordType {
-    CLASS, METHOD, FUNCTION,
-    CONSTRUCTOR,
+    CLASS, METHOD, FUNCTION, CONSTRUCTOR,
     INT, BOOLEAN, CHAR, VOID,
     VAR, STATIC, FIELD,
     LET, DO, IF, ELSE,

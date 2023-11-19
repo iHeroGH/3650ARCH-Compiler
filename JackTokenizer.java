@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,7 +17,7 @@ public class JackTokenizer {
     private Scanner scanner;
 
     private String currentTokenString;
-    private ArrayList<Token> tokens;
+    private List<Token> tokens;
 
     public JackTokenizer(String filePath){
         this.filePath = filePath;
@@ -140,7 +141,7 @@ public class JackTokenizer {
         return this.filePath;
     }
 
-    public ArrayList<Token> getTokens(){
+    public List<Token> getTokens(){
         return this.tokens;
     }
 
