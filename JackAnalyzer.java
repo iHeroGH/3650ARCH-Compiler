@@ -5,7 +5,7 @@ public class JackAnalyzer {
 
     public static void main(String[] args){
 
-        String filePath = "Square\\Square.jack";
+        String filePath = "ArrayTest\\Main.jack";
         JackTokenizer tokenizer = new JackTokenizer(filePath);
         CompilationEngine compiler = new CompilationEngine(tokenizer);
 

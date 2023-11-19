@@ -16,7 +16,11 @@ public class CompilationEngine {
     );
 
     private static List<String> possibleTypes = new ArrayList<String>(
-        Arrays.asList("int", "char", "boolean")
+        Arrays.asList(
+            "int", "char", "boolean", "void",
+            "Math", "String", "Array", "Output",
+            "Screen", "Keyboard", "Memory", "Sys"
+        )
     );
 
     private JackTokenizer tokenizer;
@@ -131,7 +135,6 @@ public class CompilationEngine {
             ){
                 compiledTokens.add(new Token(NonTerminal.classVarDec, false));
                 compiledTokens.add(currToken);
-                compilationPointer++;
                 compileClassVarDec();
             } else {
                 break;
@@ -163,6 +166,7 @@ public class CompilationEngine {
                 compiledTokens.add(currToken);
                 compilationPointer++;
                 compileSubroutine();
+                break;
             } else {
                 break;
             }
@@ -173,6 +177,217 @@ public class CompilationEngine {
 
     private void compileClassVarDec(){
 
+        Matcher match;
+        Token currToken;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+
+            // Invalid XML
+            match = xmlPattern.matcher(currToken.toString());
+            if(!match.matches()){
+                throw new RuntimeException(
+                    "Invalid XML " + currToken.toString()
+                );
+            }
+
+            compileVarDec();
+            break;
+        }
+
+        compiledTokens.add(new Token(NonTerminal.classVarDec, true));
+    }
+
+    private void compileSubroutine(){
+        Matcher match;
+        Token currToken;
+        boolean foundType = false;
+        boolean openPar = false;
+        boolean openCurl = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+
+            // Invalid XML
+            match = xmlPattern.matcher(currToken.toString());
+            if(!match.matches()){
+                throw new RuntimeException(
+                    "Invalid XML " + currToken.toString()
+                );
+            }
+
+            // Void or type
+            if(!foundType){
+                if (
+                    (match.group("type").equals("keyword") |
+                    match.group("type").equals("identifier")) &
+                    possibleTypes.contains(match.group("value"))
+                ){
+                    compiledTokens.add(currToken);
+                    foundType = true;
+                    continue;
+                }
+            }
+
+            // Name
+            if (match.group("type").equals("identifier")){
+                if(!foundType){
+                    throw new RuntimeException("No type declared.");
+                }
+                compiledTokens.add(currToken);
+                continue;
+            }
+
+            // (
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("(")
+                ){
+                    if (openPar){
+                        throw new RuntimeException("Hanging (");
+                    }
+                    openPar = true;
+                    compiledTokens.add(currToken);
+            }
+
+            // Parameter list
+            // = type name, type name*
+            compileParameterList();
+            break;
+        }
+
+        // Body
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            // Invalid XML
+            match = xmlPattern.matcher(currToken.toString());
+            if(!match.matches()){
+                throw new RuntimeException(
+                    "Invalid XML " + currToken.toString()
+                );
+            }
+
+            // {
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("{")
+                ){
+                    if (openCurl){
+                        throw new RuntimeException("Hanging {");
+                    }
+                    openCurl = true;
+                    compiledTokens.add(new Token(NonTerminal.subroutineBody, false));
+                    compiledTokens.add(currToken);
+                    continue;
+            }
+
+            // subroutineBody
+            // = varDec* statements
+            // = var type name (, name)*;
+            // = statements...
+            if(openCurl){
+                if (
+                    match.group("type").equals("keyword") &
+                    match.group("value").equals("var")
+                ){
+                    compiledTokens.add(new Token(NonTerminal.varDec, false));
+                    compiledTokens.add(currToken);
+                    compileVarDec();
+                    compiledTokens.add(new Token(NonTerminal.varDec, true));
+                }
+            }
+
+            // }
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("}")
+                ){
+                    if (!openCurl){
+                        throw new RuntimeException("Hanging }");
+                    }
+                    compiledTokens.add(currToken);
+                    break;
+            }
+
+        }
+
+        compiledTokens.add(new Token(NonTerminal.subroutineDec, true));
+    }
+
+    private void compileParameterList(){
+        Matcher match;
+        Token currToken = null;
+        boolean validVariables = true;
+        boolean foundType = false;
+
+        compiledTokens.add(new Token(NonTerminal.parameterList, false));
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            // Invalid XML
+            match = xmlPattern.matcher(currToken.toString());
+            if(!match.matches()){
+                throw new RuntimeException(
+                    "Invalid XML " + currToken.toString()
+                );
+            }
+
+            // )
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals(")")
+                ){
+                    if (!validVariables){
+                        throw new RuntimeException("Invalid variables.");
+                    }
+                    break;
+            }
+
+            // Type
+            if (!foundType){
+                if (
+                    (match.group("type").equals("keyword") |
+                    match.group("type").equals("identifier")) &
+                    possibleTypes.contains(match.group("value"))
+                    ){
+                        compiledTokens.add(currToken);
+                        validVariables = false;
+                        foundType = true;
+                        continue;
+                } else {
+                    throw new RuntimeException(
+                        "Unknown type " + match.group("value")
+                    );
+                }
+            }
+
+            // Variable Name
+            if (match.group("type").equals("identifier")){
+                if(!foundType){
+                    throw new RuntimeException("No type declared.");
+                }
+                compiledTokens.add(currToken);
+                validVariables = true;
+                continue;
+            }
+
+            // ,
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals(",")
+                ){
+                    if (!validVariables){
+                        throw new RuntimeException("Hanging comma.");
+                    }
+                    compiledTokens.add(currToken);
+                    validVariables = false;
+                    foundType = false;
+                    continue;
+            }
+        }
+
+        compiledTokens.add(new Token(NonTerminal.parameterList, true));
+        compiledTokens.add(currToken);
+    }
+
+    private void compileVarDec(){
         Matcher match;
         Token currToken;
         boolean validVariables = false;
@@ -245,146 +460,7 @@ public class CompilationEngine {
                     compiledTokens.add(currToken);
                     break;
             }
-
         }
-
-        compiledTokens.add(new Token(NonTerminal.classVarDec, true));
-    }
-
-    private void compileSubroutine(){
-        Matcher match;
-        Token currToken;
-        boolean foundType = false;
-        while (compilationPointer < numTokens){
-            currToken = tokens.get(compilationPointer++);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
-
-            // Void or type
-            if(!foundType){
-                if (
-                    (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) &
-                    (possibleTypes.contains(match.group("value")) |
-                    match.group("value").equals("void"))
-                    ){
-                        compiledTokens.add(currToken);
-                        foundType = true;
-                        continue;
-                }
-            }
-
-            // Name
-            if (match.group("type").equals("identifier")){
-                if(!foundType){
-                    throw new RuntimeException("No type declared.");
-                }
-                compiledTokens.add(currToken);
-                continue;
-            }
-
-            // (
-            if (
-                match.group("type").equals("symbol") &
-                match.group("value").equals("(")
-                ){
-                    compiledTokens.add(currToken);
-            }
-
-            // Parameter list
-            // = type name, type name*
-            compileParameterList();
-            break;
-
-            // subroutineBody
-        }
-
-        compiledTokens.add(new Token(NonTerminal.subroutineDec, true));
-    }
-
-    private void compileParameterList(){
-        Matcher match;
-        Token currToken = null;
-        boolean validVariables = false;
-        boolean foundType = false;
-
-        compiledTokens.add(new Token(NonTerminal.parameterList, false));
-        while (compilationPointer < numTokens){
-            currToken = tokens.get(compilationPointer++);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
-
-            // Type
-            if (!foundType){
-                if (
-                    (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) &
-                    possibleTypes.contains(match.group("value"))
-                    ){
-                        compiledTokens.add(currToken);
-                        foundType = true;
-                        continue;
-                } else {
-                    throw new RuntimeException(
-                        "Unknown type " + match.group("value")
-                    );
-                }
-            }
-
-            // Variable Name
-            if (match.group("type").equals("identifier")){
-                if(!foundType){
-                    throw new RuntimeException("No type declared.");
-                }
-                compiledTokens.add(currToken);
-                validVariables = true;
-                continue;
-            }
-
-            // ,
-            if (
-                match.group("type").equals("symbol") &
-                match.group("value").equals(",")
-                ){
-                    if (!validVariables){
-                        throw new RuntimeException("Hanging comma.");
-                    }
-                    compiledTokens.add(currToken);
-                    validVariables = false;
-                    foundType = false;
-                    continue;
-            }
-
-            // )
-            if (
-                match.group("type").equals("symbol") &
-                match.group("value").equals(")")
-                ){
-                    if (!validVariables){
-                        throw new RuntimeException("Invalid variables.");
-                    }
-                    break;
-            }
-        }
-
-        compiledTokens.add(new Token(NonTerminal.parameterList, true));
-        compiledTokens.add(currToken);
-    }
-
-    private void compileVarDec(){
-
     }
 
     private void compileStatements(){
