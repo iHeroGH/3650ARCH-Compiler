@@ -119,6 +119,11 @@ public class Token {
 
         if(identOrStr){
             this.tokenType = TokenType.IDENTIFIER;
+            if(Character.isDigit(inpString.charAt(0))){
+                throw new RuntimeException(
+                    "Invalid Identifier " + inpString
+                );
+            }
             this.identifier = inpString;
         } else {
             this.tokenType = TokenType.STRING_CONST;
