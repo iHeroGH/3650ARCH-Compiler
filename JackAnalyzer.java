@@ -7,9 +7,10 @@ public class JackAnalyzer {
 
         String filePath = "ArrayTest\\Main.jack";
         JackTokenizer tokenizer = new JackTokenizer(filePath);
-        CompilationEngine compiler = new CompilationEngine(tokenizer);
 
+        CompilationEngine compiler = new CompilationEngine(tokenizer);
         writeToFile(compiler);
+
     }
 
     public static void writeToFile(CompilationEngine compiler){

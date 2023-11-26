@@ -37,7 +37,11 @@ public class CompilationEngine {
         this.compiledTokens = new ArrayList<Token>();
         this.compilationPointer = 0;
 
-        compileClass();
+        try{
+            compileClass();
+        } catch (Exception e) {
+            throw e;
+        }
     }
 
     private void compileClass(){
@@ -55,14 +59,7 @@ public class CompilationEngine {
         Token currToken;
         for(; compilationPointer < 3; compilationPointer++){
             currToken = tokens.get(compilationPointer);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             // class
             if(compilationPointer == 0){
@@ -117,14 +114,7 @@ public class CompilationEngine {
         // = static|field type varName (, varName)*;
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             if (
                 match.group("type").equals("keyword") &
@@ -145,14 +135,7 @@ public class CompilationEngine {
         // = constructor|function|method void|type name ( parameterList ) subroutineBody
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             if (
                 match.group("type").equals("keyword") &
@@ -172,24 +155,21 @@ public class CompilationEngine {
             }
         }
 
-        compiledTokens.add(new Token(NonTerminal.CLASS, true));
+        // }
+        currToken = tokens.get(compilationPointer);
+        match = getMatch(currToken);
+        if (match.group("value").equals("}")){
+            compiledTokens.add(currToken);
+            compiledTokens.add(new Token(NonTerminal.CLASS, true));
+        } else{
+            throw new RuntimeException("Unterminated Class");
+        }
     }
 
     private void compileClassVarDec(){
 
-        Matcher match;
-        Token currToken;
         while (compilationPointer < numTokens){
-            currToken = tokens.get(compilationPointer++);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
-
+            compilationPointer++;
             compileVarDec();
             break;
         }
@@ -205,14 +185,7 @@ public class CompilationEngine {
         boolean openCurl = false;
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             // Void or type
             if(!foundType){
@@ -257,13 +230,7 @@ public class CompilationEngine {
         // Body
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             // {
             if (
@@ -279,20 +246,31 @@ public class CompilationEngine {
                     continue;
             }
 
+
             // subroutineBody
             // = varDec* statements
             // = var type name (, name)*;
             // = statements...
             if(openCurl){
-                if (
+                while (
                     match.group("type").equals("keyword") &
                     match.group("value").equals("var")
-                ){
+                    ){
+
                     compiledTokens.add(new Token(NonTerminal.varDec, false));
                     compiledTokens.add(currToken);
                     compileVarDec();
+
+                    currToken = tokens.get(compilationPointer++);
+                    match = getMatch(currToken);
+
                     compiledTokens.add(new Token(NonTerminal.varDec, true));
                 }
+                compilationPointer--;
+                compileStatements();
+                compilationPointer++;
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
             }
 
             // }
@@ -309,6 +287,7 @@ public class CompilationEngine {
 
         }
 
+        compiledTokens.add(new Token(NonTerminal.subroutineBody, true));
         compiledTokens.add(new Token(NonTerminal.subroutineDec, true));
     }
 
@@ -321,13 +300,7 @@ public class CompilationEngine {
         compiledTokens.add(new Token(NonTerminal.parameterList, false));
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             // )
             if (
@@ -394,14 +367,7 @@ public class CompilationEngine {
         boolean foundType = false;
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
-
-            // Invalid XML
-            match = xmlPattern.matcher(currToken.toString());
-            if(!match.matches()){
-                throw new RuntimeException(
-                    "Invalid XML " + currToken.toString()
-                );
-            }
+            match = getMatch(currToken);
 
             // Type
             if (!foundType){
@@ -464,23 +430,140 @@ public class CompilationEngine {
     }
 
     private void compileStatements(){
+        Matcher match;
+        Token currToken;
+        compiledTokens.add(new Token(NonTerminal.statements, false));
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
 
+            if (match.group("type").equals("symbol")){
+                compilationPointer--;
+                break;
+            }
+
+            // Invalid statement
+            if (!match.group("type").equals("keyword")){
+                throw new RuntimeException("Invalid statement keyword.");
+            }
+
+            switch (match.group("value")){
+                case "let":
+                    compiledTokens.add(new Token(NonTerminal.letStatement, false));
+                    compiledTokens.add(currToken);
+                    compileLet();
+                    compiledTokens.add(new Token(NonTerminal.letStatement, true));
+                    break;
+                case "if":
+                    compiledTokens.add(new Token(NonTerminal.ifStatement, false));
+                    compiledTokens.add(currToken);
+                    compileIf();
+                    compiledTokens.add(new Token(NonTerminal.ifStatement, true));
+                    break;
+                case "while":
+                    compiledTokens.add(new Token(NonTerminal.whileStatement, false));
+                    compiledTokens.add(currToken);
+                    compileWhile();
+                    compiledTokens.add(new Token(NonTerminal.whileStatement, true));
+                    break;
+                case "do":
+                    compiledTokens.add(new Token(NonTerminal.doStatement, false));
+                    compiledTokens.add(currToken);
+                    compileDo();
+                    compiledTokens.add(new Token(NonTerminal.doStatement, true));
+                    break;
+                case "return":
+                    compiledTokens.add(new Token(NonTerminal.returnStatement, false));
+                    compiledTokens.add(currToken);
+                    compileReturn();
+                    compiledTokens.add(new Token(NonTerminal.returnStatement, true));
+                    break;
+                default:
+                    throw new RuntimeException("Invalid statement keyword.");
+            }
+        }
+
+        compiledTokens.add(new Token(NonTerminal.statements, true));
     }
 
     private void compileDo(){
+        compileSubroutineCall();
+        Token currToken = tokens.get(compilationPointer++);
+        Matcher match = getMatch(currToken);
 
+        if(!match.group("value").equals(";")){
+            throw new RuntimeException("Unterminated");
+        } else {
+            compiledTokens.add(currToken);
+        }
     }
 
     private void compileLet(){
+        Matcher match;
+        Token currToken;
+        boolean openIndex = false;
+        boolean eqFound = false;
+        while (compilationPointer < numTokens){
+            // varName or varName[expression]
+            if (!eqFound) compileVariableOrIndexing();
+            compilationPointer--;
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
 
+            // =
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("=")
+                ){
+                    if (eqFound){
+                        throw new RuntimeException("Duplicate =");
+                    }
+                    compiledTokens.add(currToken);
+                    eqFound = true;
+            }
+
+            // expression;
+            if (eqFound){
+                if (openIndex){
+                    throw new RuntimeException("Invalid indexing");
+                }
+                compileExpression();
+                compilationPointer--;
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+                if (
+                    !match.group("type").equals("symbol") |
+                    !match.group("value").equals(";")
+                    ){
+                        throw new RuntimeException("Unterminated Stmt");
+                } else {
+                    compiledTokens.add(currToken);
+                    break;
+                }
+
+            }
+
+        }
     }
 
     private void compileWhile(){
-
+        compileWrappedExpression();
+        compileWrappedStatements();
     }
 
     private void compileReturn(){
+        Token currToken = tokens.get(compilationPointer);
+        Matcher match = getMatch(currToken);
 
+        boolean foundExpression = false;
+        if(!match.group("value").equals(";")){
+            if(!foundExpression){
+                compileExpression();
+            } else
+                throw new RuntimeException("Unterminated");
+        } else {
+            compiledTokens.add(currToken);
+        }
     }
 
     private void compileIf(){
@@ -489,15 +572,442 @@ public class CompilationEngine {
 
     private void compileExpression(){
 
+        compiledTokens.add(new Token(NonTerminal.expression, false));
+
+        Matcher match;
+        Token currToken;
+        currToken = tokens.get(compilationPointer);
+        match = getMatch(currToken);
+
+
+        compileTerm();
+        compiledTokens.add(new Token(NonTerminal.term, true));
+
+        boolean operator = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+            if (match.group("type").equals("symbol")){
+                switch(match.group("value")){
+                    case "+":
+                    case "-":
+                    case "*":
+                    case "/":
+                    case "&amp;":
+                    case "|":
+                    case "&lt;":
+                    case "&gt;":
+                    case "=":
+                        compiledTokens.add(currToken);
+                        operator = true;
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+
+            if (operator){
+                compileTerm();
+                compiledTokens.add(new Token(NonTerminal.term, true));
+                operator = false;
+            } else {
+                break;
+            }
+
+        }
+
+        compiledTokens.add(new Token(NonTerminal.expression, true));
     }
 
     private void compileTerm(){
+        compiledTokens.add(new Token(NonTerminal.term, false));
 
+        Matcher match;
+        Token currToken;
+        int brIndex = compilationPointer;
+        boolean isCall = false;
+        boolean canKnow = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // String or Int constant
+            switch (match.group("type")){
+                case "stringConstant":
+                case "integerConstant":
+                    compiledTokens.add(currToken);
+                    return;
+            }
+
+            // Keyword Constant
+            switch (match.group("value")){
+                case "true":
+                case "false":
+                case "null":
+                case "this":
+                    compiledTokens.add(currToken);
+                    return;
+            }
+
+            // Unary term
+            if (
+                match.group("type").equals("symbol") &
+                (match.group("value").equals("-") |
+                 match.group("value").equals("~"))
+                ){
+
+                    compiledTokens.add(currToken);
+                    compileTerm();
+                    compiledTokens.add(new Token(NonTerminal.term, true));
+                    return;
+            }
+
+            // (
+            else if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("(")
+                ){
+                    compilationPointer--;
+                    compileWrappedExpression();
+                    return;
+            }
+
+            if(match.group("value").equals(".")){
+                isCall = true;
+                canKnow = true;
+            }
+
+            if(isCall){ // Subroutine
+                compilationPointer = brIndex;
+                compileSubroutineCall();
+                return;
+            }
+
+            if(canKnow & !isCall){ // Variable
+                compilationPointer = brIndex;
+                compileVariableOrIndexing();
+                compilationPointer--;
+                return;
+            }
+
+            canKnow = true;
+        }
     }
 
     private void compileExpressionList(){
+        Matcher match;
+        Token currToken;
+        boolean validExpressions = true;
+        compiledTokens.add(new Token(NonTerminal.expressionList, false));
 
+        // Expression
+        compilationPointer--;
+        compileExpression();
+        compilationPointer--;
+        while (compilationPointer < numTokens){
+
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // ,
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals(",")
+                ){
+                    if (!validExpressions){
+                        throw new RuntimeException("Hanging comma.");
+                    }
+                    compiledTokens.add(currToken);
+                    validExpressions = false;
+                    continue;
+            }
+
+            if (!validExpressions){
+                compileExpression();
+                validExpressions = true;
+                continue;
+            }
+
+            // )
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals(")")
+                ){
+                    if (!validExpressions){
+                        throw new RuntimeException("Invalid expressions.");
+                    }
+                    compilationPointer--;
+                    break;
+            }
+        }
+        compiledTokens.add(new Token(NonTerminal.expressionList, true));
     }
+
+    private void compileSubroutineCall(){
+        Matcher match;
+        Token currToken;
+        boolean nameFound = false;
+        boolean openPar = false;
+
+        int brIndex = compilationPointer;
+        Token possibleName = null;
+
+        // className|varName .
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            if (match.group("type").equals("identifier")){
+                if(possibleName != null){
+                    throw new RuntimeException("Duplicate name");
+                }
+                possibleName = currToken;
+                continue;
+            }
+
+            if (possibleName != null){
+                if (
+                    match.group("type").equals("symbol") &
+                    match.group("value").equals(".")
+                    ){
+                    compiledTokens.add(possibleName);
+                    compiledTokens.add(currToken);
+                    break;
+                } else {
+                    compilationPointer = brIndex;
+                }
+            }
+
+        }
+
+        // subroutineName(expressionList)
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // Subroutine name
+            if (match.group("type").equals("identifier")){
+                if(nameFound){
+                    throw new RuntimeException("Duplicate name");
+                }
+                compiledTokens.add(currToken);
+                nameFound = true;
+                continue;
+            }
+
+            // (
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("(")
+                ){
+                    compiledTokens.add(currToken);
+                    openPar = true;
+            }
+
+            if (openPar){
+                if (!nameFound){
+                        throw new RuntimeException("No name");
+                    }
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+                // )
+                if (
+                    match.group("type").equals("symbol") &
+                    match.group("value").equals(")")
+                    ){
+                        compiledTokens.add(
+                            new Token(NonTerminal.expressionList, false)
+                        );
+                        compiledTokens.add(
+                            new Token(NonTerminal.expressionList, true)
+                        );
+                        compiledTokens.add(currToken);
+                        break;
+                }
+
+                compileExpressionList();
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+                // )
+                if (
+                    match.group("type").equals("symbol") &
+                    match.group("value").equals(")")
+                    ){
+                        compiledTokens.add(currToken);
+                        break;
+                }
+            }
+        }
+    }
+
+    private void compileVariableOrIndexing(){
+        Matcher match;
+        Token currToken;
+        boolean varNameFound = false;
+        boolean openIndex = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // Variable Name
+            if (match.group("type").equals("identifier")){
+
+                if (varNameFound){
+                    throw new RuntimeException("Duplicate name");
+                }
+
+                compiledTokens.add(currToken);
+                varNameFound = true;
+                continue;
+            }
+
+            // [expression]
+            // [
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("[")
+                ){
+
+                if (!varNameFound){
+                    throw new RuntimeException("No variable to index");
+                }
+                if (openIndex){
+                    throw new RuntimeException("Hanging [");
+                }
+
+                compiledTokens.add(currToken);
+                openIndex = true;
+            }
+
+            // expression]
+            if (openIndex){
+
+                if (!varNameFound){
+                    throw new RuntimeException("No variable to index");
+                }
+
+                compileExpression();
+                compilationPointer--;
+
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+
+                if (
+                    !match.group("type").equals("symbol") |
+                    !match.group("value").equals("]")
+                    ){
+                        throw new RuntimeException("Hanging [");
+                } else {
+                    compiledTokens.add(currToken);
+                    compilationPointer++;
+                    openIndex = false;
+                }
+
+                break;
+            }
+
+            if (varNameFound){
+                break;
+            }
+        }
+    }
+
+    private void compileWrappedExpression(){
+        Matcher match;
+        Token currToken;
+        boolean openPar = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // (
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("(")
+                ){
+                    if (openPar){
+                        throw new RuntimeException("Hanging (");
+                    }
+                    openPar = true;
+                    compiledTokens.add(currToken);
+            }
+
+            // expression
+            if(openPar){
+                compileExpression();
+                compilationPointer--;
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+
+                // )
+                if (
+                    match.group("type").equals("symbol") &
+                    match.group("value").equals(")")
+                    ){
+                        if (!openPar){
+                            throw new RuntimeException("Hanging )");
+                        }
+                        compiledTokens.add(currToken);
+                        break;
+                }
+            }
+        }
+    }
+
+    private void compileWrappedStatements(){
+        Matcher match;
+        Token currToken;
+        boolean openCurl = false;
+        while (compilationPointer < numTokens){
+            currToken = tokens.get(compilationPointer++);
+            match = getMatch(currToken);
+
+            // {
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("{")
+                ){
+                    if (openCurl){
+                        throw new RuntimeException("Hanging {");
+                    }
+                    openCurl = true;
+                    compiledTokens.add(currToken);
+            }
+
+
+            // statements
+            if(openCurl){
+                compileStatements();
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+            }
+
+            // }
+            if (
+                match.group("type").equals("symbol") &
+                match.group("value").equals("}")
+                ){
+                    if (!openCurl){
+                        throw new RuntimeException("Hanging }");
+                    }
+                    compiledTokens.add(currToken);
+                    break;
+            }
+
+        }
+    }
+
+    private Matcher getMatch(Token currToken){
+        Matcher match = xmlPattern.matcher(currToken.toString());
+        if(!match.matches()){
+            throw new RuntimeException(
+                "Invalid XML " + currToken.toString()
+            );
+        }
+        return match;
+    }
+
 
     public List<Token> getTokens(){
         return this.compiledTokens;
