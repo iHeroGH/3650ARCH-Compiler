@@ -319,8 +319,8 @@ public class CompilationEngine {
             if (!foundType){
                 if (
                     (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) &
-                    possibleTypes.contains(match.group("value"))
+                    match.group("type").equals("identifier")) //&
+                    //possibleTypes.contains(match.group("value")) TODO
                     ){
                         compiledTokens.add(currToken);
                         validVariables = false;
@@ -375,8 +375,8 @@ public class CompilationEngine {
             if (!foundType){
                 if (
                     (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) &
-                    possibleTypes.contains(match.group("value"))
+                    match.group("type").equals("identifier")) // &
+                    // possibleTypes.contains(match.group("value")) TODO
                     ){
                         compiledTokens.add(currToken);
                         foundType = true;
@@ -577,16 +577,27 @@ public class CompilationEngine {
     private void compileIf(){
         compileWrappedExpression();
         compileWrappedStatements();
+
+        Token currToken = tokens.get(compilationPointer);
+        Matcher match = getMatch(currToken);
+
+        if (
+            match.group("type").equals("keyword") &
+            match.group("value").equals("else")
+            ){
+                compiledTokens.add(currToken);
+                compilationPointer++;
+                compileWrappedStatements();
+        }
+
     }
 
     private void compileExpression(){
 
         compiledTokens.add(new Token(NonTerminal.expression, false));
 
-        Matcher match;
-        Token currToken;
-        currToken = tokens.get(compilationPointer);
-        match = getMatch(currToken);
+        Token currToken = tokens.get(compilationPointer);
+        Matcher match = getMatch(currToken);
 
         compileTerm();
         compiledTokens.add(new Token(NonTerminal.term, true));
