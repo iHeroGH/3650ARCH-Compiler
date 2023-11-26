@@ -149,7 +149,7 @@ public class CompilationEngine {
                 compiledTokens.add(currToken);
                 compilationPointer++;
                 compileSubroutine();
-                break;
+                continue;
             } else {
                 break;
             }
@@ -256,19 +256,21 @@ public class CompilationEngine {
                     match.group("type").equals("keyword") &
                     match.group("value").equals("var")
                     ){
+                        compiledTokens.add(
+                            new Token(NonTerminal.varDec, false)
+                        );
+                        compiledTokens.add(currToken);
+                        compileVarDec();
 
-                    compiledTokens.add(new Token(NonTerminal.varDec, false));
-                    compiledTokens.add(currToken);
-                    compileVarDec();
+                        currToken = tokens.get(compilationPointer++);
+                        match = getMatch(currToken);
 
-                    currToken = tokens.get(compilationPointer++);
-                    match = getMatch(currToken);
-
-                    compiledTokens.add(new Token(NonTerminal.varDec, true));
+                        compiledTokens.add(
+                            new Token(NonTerminal.varDec, true)
+                        );
                 }
                 compilationPointer--;
                 compileStatements();
-                compilationPointer++;
                 currToken = tokens.get(compilationPointer++);
                 match = getMatch(currToken);
             }
@@ -444,7 +446,9 @@ public class CompilationEngine {
 
             // Invalid statement
             if (!match.group("type").equals("keyword")){
-                throw new RuntimeException("Invalid statement keyword.");
+                throw new RuntimeException(
+                        "Invalid statement keyword " + match.group("value")
+                    );
             }
 
             switch (match.group("value")){
@@ -479,7 +483,9 @@ public class CompilationEngine {
                     compiledTokens.add(new Token(NonTerminal.returnStatement, true));
                     break;
                 default:
-                    throw new RuntimeException("Invalid statement keyword.");
+                    throw new RuntimeException(
+                        "Invalid statement keyword " + match.group("value")
+                    );
             }
         }
 
@@ -555,19 +561,22 @@ public class CompilationEngine {
         Token currToken = tokens.get(compilationPointer);
         Matcher match = getMatch(currToken);
 
-        boolean foundExpression = false;
         if(!match.group("value").equals(";")){
-            if(!foundExpression){
-                compileExpression();
-            } else
-                throw new RuntimeException("Unterminated");
-        } else {
+            compileExpression();
+            compilationPointer--;
+            currToken = tokens.get(compilationPointer);
+            match = getMatch(currToken);
+        }
+
+        if(match.group("value").equals(";")){
             compiledTokens.add(currToken);
+            compilationPointer++;
         }
     }
 
     private void compileIf(){
-
+        compileWrappedExpression();
+        compileWrappedStatements();
     }
 
     private void compileExpression(){
@@ -578,7 +587,6 @@ public class CompilationEngine {
         Token currToken;
         currToken = tokens.get(compilationPointer);
         match = getMatch(currToken);
-
 
         compileTerm();
         compiledTokens.add(new Token(NonTerminal.term, true));
@@ -632,6 +640,34 @@ public class CompilationEngine {
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
 
+            if(
+                match.group("value").equals(".") |
+                match.group("value").equals("(")
+                ){
+                    if (canKnow){
+                        isCall = true;
+                    }
+            }
+
+            if(canKnow & isCall){ // Subroutine
+                compilationPointer = brIndex;
+                compileSubroutineCall();
+                return;
+            }
+
+            if(canKnow & !isCall){ // Variable
+                compilationPointer = brIndex;
+                compileVariableOrIndexing();
+                compilationPointer--;
+                return;
+            }
+
+            if(canKnow){
+                compilationPointer--;
+                currToken = tokens.get(compilationPointer++);
+                match = getMatch(currToken);
+            }
+
             // String or Int constant
             switch (match.group("type")){
                 case "stringConstant":
@@ -673,25 +709,8 @@ public class CompilationEngine {
                     return;
             }
 
-            if(match.group("value").equals(".")){
-                isCall = true;
-                canKnow = true;
-            }
-
-            if(isCall){ // Subroutine
-                compilationPointer = brIndex;
-                compileSubroutineCall();
-                return;
-            }
-
-            if(canKnow & !isCall){ // Variable
-                compilationPointer = brIndex;
-                compileVariableOrIndexing();
-                compilationPointer--;
-                return;
-            }
-
             canKnow = true;
+
         }
     }
 
@@ -724,7 +743,9 @@ public class CompilationEngine {
             }
 
             if (!validExpressions){
+                compilationPointer--;
                 compileExpression();
+                compilationPointer--;
                 validExpressions = true;
                 continue;
             }
@@ -776,9 +797,9 @@ public class CompilationEngine {
                     break;
                 } else {
                     compilationPointer = brIndex;
+                    break;
                 }
             }
-
         }
 
         // subroutineName(expressionList)
