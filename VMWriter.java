@@ -4,12 +4,10 @@ import java.io.PrintWriter;
 public class VMWriter {
 
     private String filePath;
-    private CompilationEngine compiler;
     private PrintWriter writer;
 
-    public VMWriter(String filePath, CompilationEngine compiler){
+    public VMWriter(String filePath){
         this.filePath = filePath;
-        this.compiler = compiler;
 
         String outputPath = this.filePath.replaceAll(
             "\\.jack", ".vm"

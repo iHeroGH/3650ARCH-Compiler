@@ -97,7 +97,7 @@ public class SymbolTable {
 
     @Override
     public String toString(){
-        return classScopeString() + subroutineScopeString();
+        return subroutineScopeString() + "\n\n" + classScopeString();
     }
 
     public String classScopeString(){
@@ -120,7 +120,7 @@ public class SymbolTable {
     public String subroutineScopeString(){
         String output = "";
 
-        output += "\nMethod-Scope ";
+        output += "Method-Scope ";
         output += "---------------------------------------------\n";
         output += String.format(
             "%-17s%-17s%-17s%-17s%n",

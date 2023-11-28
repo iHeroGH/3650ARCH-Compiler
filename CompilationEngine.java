@@ -26,10 +26,14 @@ public class CompilationEngine {
     private JackTokenizer tokenizer;
     private List<Token> tokens;
     private int numTokens;
+
     private List<Token> compiledTokens;
     private int compilationPointer;
-    private SymbolTable symbolTable;
+
     private String className;
+    private SymbolTable symbolTable;
+
+    private VMWriter vmWriter;
 
     public CompilationEngine(JackTokenizer tokenizer){
         this.tokenizer = tokenizer;
@@ -39,7 +43,10 @@ public class CompilationEngine {
         this.compiledTokens = new ArrayList<Token>();
         this.compilationPointer = 0;
 
+        this.className = "";
         this.symbolTable = new SymbolTable();
+
+        this.vmWriter = new VMWriter(tokenizer.getFilePath());
 
         try{
             compileClass();
