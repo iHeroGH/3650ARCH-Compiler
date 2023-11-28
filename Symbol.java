@@ -1,4 +1,4 @@
-public class Symbol {
+public class Symbol implements Comparable<Symbol> {
 
     private String name;
     private String type;
@@ -26,5 +26,22 @@ public class Symbol {
 
     public int getIndex(){
         return this.index;
+    }
+
+    @Override
+    public String toString(){
+        return String.format(
+            "%-17s%-17s%-17s%-17s%n",
+            this.name, this.type, this.kind, this.index
+        );
+    }
+
+    @Override
+    public int compareTo(Symbol o) {
+        int kindComp = this.kind.name().compareTo(o.kind.name());
+        if (kindComp == 0){
+            return this.index - o.index;
+        }
+        return kindComp;
     }
 }

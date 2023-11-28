@@ -1,4 +1,7 @@
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class SymbolTable {
@@ -12,11 +15,12 @@ public class SymbolTable {
     }
 
     public void startSubRoutine(){
+        if (subroutineScope.size() != 0) System.out.println(subroutineScopeString());
         subroutineScope.clear();
     }
 
     public void define(String name, String type, Identifier kind){
-        Symbol symbol = new Symbol(name, type, kind, varCount(kind) + 1);
+        Symbol symbol = new Symbol(name, type, kind, varCount(kind));
 
         switch (kind){
             case STATIC:
@@ -91,8 +95,67 @@ public class SymbolTable {
         throw new RuntimeException("Out-of-scope variable " + name);
     }
 
+    @Override
+    public String toString(){
+        return classScopeString() + subroutineScopeString();
+    }
+
+    public String classScopeString(){
+        String output = "";
+
+        output += "Class-Scope ";
+        output += "---------------------------------------------\n";
+        output += String.format(
+            "%-17s%-17s%-17s%-17s%n",
+            "Name", "Type", "Kind", "#"
+        );
+        output += "---------------------------------------------------------\n";
+        for(Symbol symbol : sortScope(classScope)){
+            output += symbol.toString() + "\n";
+        }
+
+        return output;
+    }
+
+    public String subroutineScopeString(){
+        String output = "";
+
+        output += "\nMethod-Scope ";
+        output += "---------------------------------------------\n";
+        output += String.format(
+            "%-17s%-17s%-17s%-17s%n",
+            "Name", "Type", "Kind", "#"
+        );
+        output += "---------------------------------------------------------\n";
+        for(Symbol symbol : sortScope(subroutineScope)){
+            output += symbol.toString() + "\n";
+        }
+
+        return output;
+    }
+
+    public List<Symbol> sortScope(Map<String, Symbol> scope){
+        List<Symbol> symbolList = new ArrayList<Symbol>(scope.values());
+        Collections.sort(symbolList);
+        return symbolList;
+    }
+
 }
 
 enum Identifier{
     STATIC, FIELD, ARG, VAR;
+
+    public static Identifier fromString(String strId){
+        strId = strId.toLowerCase();
+        switch(strId){
+            case "static":
+                return Identifier.STATIC;
+            case "field":
+                return Identifier.FIELD;
+            case "var":
+                return Identifier.VAR;
+            default:
+                return Identifier.ARG;
+        }
+    }
 }

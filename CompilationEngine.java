@@ -29,6 +29,7 @@ public class CompilationEngine {
     private List<Token> compiledTokens;
     private int compilationPointer;
     private SymbolTable symbolTable;
+    private String className;
 
     public CompilationEngine(JackTokenizer tokenizer){
         this.tokenizer = tokenizer;
@@ -45,6 +46,8 @@ public class CompilationEngine {
         } catch (Exception e) {
             throw e;
         }
+
+        System.out.println(symbolTable);
     }
 
     private void compileClass(){
@@ -88,6 +91,7 @@ public class CompilationEngine {
                         "No Class Found."
                     );
                 possibleTypes.add(match.group("value"));
+                className = match.group("value");
                 compiledTokens.add(currToken);
             }
 
@@ -128,7 +132,7 @@ public class CompilationEngine {
             ){
                 compiledTokens.add(new Token(NonTerminal.classVarDec, false));
                 compiledTokens.add(currToken);
-                compileClassVarDec();
+                compileClassVarDec(Identifier.fromString(match.group("value")));
             } else {
                 break;
             }
@@ -151,7 +155,9 @@ public class CompilationEngine {
                 compiledTokens.add(new Token(NonTerminal.subroutineDec, false));
                 compiledTokens.add(currToken);
                 compilationPointer++;
-                compileSubroutine();
+                symbolTable.startSubRoutine();
+
+                compileSubroutine(match.group("value").equals("method"));
                 continue;
             } else {
                 break;
@@ -169,18 +175,18 @@ public class CompilationEngine {
         }
     }
 
-    private void compileClassVarDec(){
+    private void compileClassVarDec(Identifier kind){
 
         while (compilationPointer < numTokens){
             compilationPointer++;
-            compileVarDec();
+            compileVarDec(kind);
             break;
         }
 
         compiledTokens.add(new Token(NonTerminal.classVarDec, true));
     }
 
-    private void compileSubroutine(){
+    private void compileSubroutine(boolean isMethod){
         Matcher match;
         Token currToken;
         boolean foundType = false;
@@ -208,6 +214,13 @@ public class CompilationEngine {
                 if(!foundType){
                     throw new RuntimeException("No type declared.");
                 }
+
+                if(isMethod){
+                    this.symbolTable.define(
+                        "this", className, Identifier.ARG
+                    );
+                }
+
                 compiledTokens.add(currToken);
                 continue;
             }
@@ -263,7 +276,7 @@ public class CompilationEngine {
                             new Token(NonTerminal.varDec, false)
                         );
                         compiledTokens.add(currToken);
-                        compileVarDec();
+                        compileVarDec(Identifier.fromString("var"));
 
                         currToken = tokens.get(compilationPointer++);
                         match = getMatch(currToken);
@@ -302,6 +315,9 @@ public class CompilationEngine {
         boolean validVariables = true;
         boolean foundType = false;
 
+        String type = "";
+        String varName = "";
+
         compiledTokens.add(new Token(NonTerminal.parameterList, false));
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
@@ -322,9 +338,9 @@ public class CompilationEngine {
             if (!foundType){
                 if (
                     (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) //&
-                    //possibleTypes.contains(match.group("value")) TODO
+                    match.group("type").equals("identifier"))
                     ){
+                        type = match.group("value");
                         compiledTokens.add(currToken);
                         validVariables = false;
                         foundType = true;
@@ -341,9 +357,10 @@ public class CompilationEngine {
                 if(!foundType){
                     throw new RuntimeException("No type declared.");
                 }
-                compiledTokens.add(currToken);
-                validVariables = true;
-                continue;
+                    varName = match.group("value");
+                    compiledTokens.add(currToken);
+                    validVariables = true;
+                    continue;
             }
 
             // ,
@@ -354,6 +371,9 @@ public class CompilationEngine {
                     if (!validVariables){
                         throw new RuntimeException("Hanging comma.");
                     }
+                    this.symbolTable.define(varName, type, Identifier.ARG);
+                    type = "";
+                    varName = "";
                     compiledTokens.add(currToken);
                     validVariables = false;
                     foundType = false;
@@ -361,15 +381,23 @@ public class CompilationEngine {
             }
         }
 
+        if (!type.equals("") & !varName.equals("")){
+            this.symbolTable.define(varName, type, Identifier.ARG);
+        }
+
         compiledTokens.add(new Token(NonTerminal.parameterList, true));
         compiledTokens.add(currToken);
     }
 
-    private void compileVarDec(){
+    private void compileVarDec(Identifier kind){
         Matcher match;
         Token currToken;
         boolean validVariables = false;
         boolean foundType = false;
+
+        String type = "";
+        List<String> varNames = new ArrayList<String>();
+
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
@@ -378,9 +406,9 @@ public class CompilationEngine {
             if (!foundType){
                 if (
                     (match.group("type").equals("keyword") |
-                    match.group("type").equals("identifier")) // &
-                    // possibleTypes.contains(match.group("value")) TODO
+                    match.group("type").equals("identifier"))
                     ){
+                        type = match.group("value");
                         compiledTokens.add(currToken);
                         foundType = true;
                         continue;
@@ -396,6 +424,7 @@ public class CompilationEngine {
                 if(!foundType){
                     throw new RuntimeException("No type declared.");
                 }
+                varNames.add(match.group("value"));
                 compiledTokens.add(currToken);
                 validVariables = true;
                 continue;
@@ -429,6 +458,11 @@ public class CompilationEngine {
                         throw new RuntimeException("Invalid variables.");
                     }
                     compiledTokens.add(currToken);
+
+                    for(String varName : varNames){
+                        this.symbolTable.define(varName, type, kind);
+                    }
+
                     break;
             }
         }
