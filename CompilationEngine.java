@@ -28,6 +28,7 @@ public class CompilationEngine {
     private int numTokens;
     private List<Token> compiledTokens;
     private int compilationPointer;
+    private SymbolTable symbolTable;
 
     public CompilationEngine(JackTokenizer tokenizer){
         this.tokenizer = tokenizer;
@@ -36,6 +37,8 @@ public class CompilationEngine {
 
         this.compiledTokens = new ArrayList<Token>();
         this.compilationPointer = 0;
+
+        this.symbolTable = new SymbolTable();
 
         try{
             compileClass();

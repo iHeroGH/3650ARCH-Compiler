@@ -1,7 +1,7 @@
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 
-public class JackAnalyzer {
+public class __JackAnalyzer {
 
     public static void main(String[] args){
 
