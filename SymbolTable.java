@@ -15,7 +15,8 @@ public class SymbolTable {
     }
 
     public void startSubRoutine(){
-        // if (subroutineScope.size() != 0) System.out.println(subroutineScopeString());
+        // if (subroutineScope.size() != 0)
+            // System.out.println(subroutineScopeString());
         subroutineScope.clear();
     }
 
@@ -81,7 +82,7 @@ public class SymbolTable {
             return classScope.get(name).getType();
         }
 
-        throw new RuntimeException("Out-of-scope variable " + name);
+        return "";
     }
 
     public int indexOf(String name){

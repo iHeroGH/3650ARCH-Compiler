@@ -699,7 +699,7 @@ public class CompilationEngine {
         compileWrappedStatements();
 
         vmWriter.writeGoto(endLabel);
-        vmWriter.writeGoto(elseLabel);
+        vmWriter.writeLabel(elseLabel);
 
         Token currToken = tokens.get(compilationPointer);
         Matcher match = getMatch(currToken);
@@ -802,9 +802,7 @@ public class CompilationEngine {
                 if(isIndex){
                     vmWriter.writePop(Segment.POINTER, 1);
                     vmWriter.writePush(Segment.THAT, 0);
-                }
-
-                if (!isIndex){
+                }else {
                     vmWriter.writePush(
                         Segment.fromIdentifer(symbolTable.kindOf(varName)),
                         symbolTable.indexOf(varName));
@@ -965,6 +963,9 @@ public class CompilationEngine {
 
         int brIndex = compilationPointer;
         Token possibleName = null;
+        boolean usedPossible = false;
+
+        int numArgs = 0;
 
         // className|varName .
         while (compilationPointer < numTokens){
@@ -986,9 +987,10 @@ public class CompilationEngine {
                     match.group("type").equals("symbol") &
                     match.group("value").equals(".")
                     ){
-                    compiledTokens.add(possibleName);
-                    compiledTokens.add(currToken);
-                    break;
+                        usedPossible = true;
+                        compiledTokens.add(possibleName);
+                        compiledTokens.add(currToken);
+                        break;
                 } else {
                     compilationPointer = brIndex;
                     break;
@@ -1018,7 +1020,23 @@ public class CompilationEngine {
                 match.group("type").equals("symbol") &
                 match.group("value").equals("(")
                 ){
-                    // vmWriter.writePush(Segment.POINTER, 0);
+                    if (!usedPossible){
+                        vmWriter.writePush(Segment.POINTER, 0);
+                    } else {
+                        String nameIdent = possibleName.getIdentifier();
+                        if (!symbolTable.typeOf(nameIdent).equals("")){
+                            vmWriter.writePush(
+                                Segment.fromIdentifer(symbolTable.kindOf(
+                                    nameIdent
+                                )),
+                                symbolTable.indexOf(nameIdent)
+                            );
+                            possibleName = new Token(
+                                symbolTable.typeOf(nameIdent), true
+                            );
+                            numArgs++;
+                        }
+                    }
                     compiledTokens.add(currToken);
                     openPar = true;
             }
@@ -1041,14 +1059,14 @@ public class CompilationEngine {
                             new Token(NonTerminal.expressionList, true)
                         );
 
-                        if(possibleName != null){
+                        if(possibleName != null & usedPossible){
                             vmWriter.writeCall(
                                 possibleName.getIdentifier() + "." +
-                                subroutineName, 0
+                                subroutineName, numArgs
                             );
                         } else {
                             vmWriter.writeCall(
-                                className + "." + subroutineName, 0
+                                className + "." + subroutineName, numArgs
                             );
                         }
 
@@ -1056,7 +1074,7 @@ public class CompilationEngine {
                         break;
                 }
 
-                int numArgs = compileExpressionList() + 1;
+                numArgs += compileExpressionList();
                 currToken = tokens.get(compilationPointer++);
                 match = getMatch(currToken);
                 // )

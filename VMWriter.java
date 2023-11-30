@@ -12,7 +12,7 @@ public class VMWriter {
         String outputPath = this.filePath.replaceAll(
             "\\.jack", ".vm"
         );
-        outputPath = "a.vm"; // TODO
+        // outputPath = "a.vm"; // TODO
 
         try{
             writer = new PrintWriter(outputPath);
