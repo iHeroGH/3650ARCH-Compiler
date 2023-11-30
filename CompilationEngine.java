@@ -34,6 +34,7 @@ public class CompilationEngine {
     private SymbolTable symbolTable;
 
     private VMWriter vmWriter;
+    private int labelIndex = 0;
 
     public CompilationEngine(JackTokenizer tokenizer){
         this.tokenizer = tokenizer;
@@ -50,14 +51,16 @@ public class CompilationEngine {
 
         try{
             compileClass();
+            vmWriter.close();
         } catch (Exception e) {
             throw e;
         }
 
-        System.out.println(symbolTable);
+        // System.out.println(symbolTable);
     }
 
     private void compileClass(){
+
         Matcher match;
         boolean foundClass = false;
 
@@ -146,7 +149,8 @@ public class CompilationEngine {
         }
 
         // subroutineDec
-        // = constructor|function|method void|type name ( parameterList ) subroutineBody
+        // = constructor|function|method void|type name ( parameterList )
+        // subroutineBody
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer);
             match = getMatch(currToken);
@@ -164,7 +168,10 @@ public class CompilationEngine {
                 compilationPointer++;
                 symbolTable.startSubRoutine();
 
-                compileSubroutine(match.group("value").equals("method"));
+                compileSubroutine(
+                    match.group("value").equals("method"),
+                    match.group("value").equals("constructor")
+                );
                 continue;
             } else {
                 break;
@@ -193,12 +200,13 @@ public class CompilationEngine {
         compiledTokens.add(new Token(NonTerminal.classVarDec, true));
     }
 
-    private void compileSubroutine(boolean isMethod){
+    private void compileSubroutine(boolean isMethod, boolean isConstructor){
         Matcher match;
         Token currToken;
         boolean foundType = false;
         boolean openPar = false;
         boolean openCurl = false;
+        String subroutineName = "";
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
@@ -228,6 +236,7 @@ public class CompilationEngine {
                     );
                 }
 
+                subroutineName = match.group("value");
                 compiledTokens.add(currToken);
                 continue;
             }
@@ -292,6 +301,25 @@ public class CompilationEngine {
                             new Token(NonTerminal.varDec, true)
                         );
                 }
+
+                vmWriter.writeFunction(
+                    className + "." + subroutineName,
+                    symbolTable.varCount(Identifier.VAR)
+                );
+
+                if (isMethod){
+                    vmWriter.writePush(Segment.ARG, 0);
+                    vmWriter.writePush(Segment.POINTER, 0);
+                }
+
+                if (isConstructor){
+                    vmWriter.writePush(
+                        Segment.CONST, symbolTable.varCount(Identifier.FIELD)
+                    );
+                    vmWriter.writeCall("Memory.alloc", 1);
+                    vmWriter.writePop(Segment.POINTER, 0);
+                }
+
                 compilationPointer--;
                 compileStatements();
                 currToken = tokens.get(compilationPointer++);
@@ -546,16 +574,22 @@ public class CompilationEngine {
         } else {
             compiledTokens.add(currToken);
         }
+
+        vmWriter.writePop(Segment.TEMP, 0);
     }
 
     private void compileLet(){
         Matcher match;
         Token currToken;
-        boolean openIndex = false;
         boolean eqFound = false;
+        String varName = "";
+        boolean isIndex = false;
+        String[] varIdentifier = new String[2];
         while (compilationPointer < numTokens){
             // varName or varName[expression]
-            if (!eqFound) compileVariableOrIndexing();
+            if (!eqFound) varIdentifier = compileVariableOrIndexing(true);
+            varName = varIdentifier[0];
+            isIndex = Boolean.valueOf(varIdentifier[1]);
             compilationPointer--;
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
@@ -574,9 +608,6 @@ public class CompilationEngine {
 
             // expression;
             if (eqFound){
-                if (openIndex){
-                    throw new RuntimeException("Invalid indexing");
-                }
                 compileExpression();
                 compilationPointer--;
                 currToken = tokens.get(compilationPointer++);
@@ -590,15 +621,49 @@ public class CompilationEngine {
                     compiledTokens.add(currToken);
                     break;
                 }
-
             }
 
+            if (isIndex){
+                vmWriter.writePop(Segment.TEMP, 0);
+                vmWriter.writePop(Segment.POINTER, 1);
+                vmWriter.writePush(Segment.TEMP, 0);
+                vmWriter.writePop(Segment.THAT, 0);
+            } else {
+                vmWriter.writePop(
+                    Segment.fromIdentifer(symbolTable.kindOf(varName)),
+                    symbolTable.indexOf(varName)
+                );
+            }
+        }
+
+        if (isIndex){
+            vmWriter.writePop(Segment.TEMP, 0);
+            vmWriter.writePop(Segment.POINTER, 1);
+            vmWriter.writePush(Segment.TEMP, 0);
+            vmWriter.writePop(Segment.THAT, 0);
+        } else {
+            vmWriter.writePop(
+                Segment.fromIdentifer(symbolTable.kindOf(varName)),
+                symbolTable.indexOf(varName)
+            );
         }
     }
 
     private void compileWhile(){
+        String continueLabel = generateLabel();
+        String topLabel = generateLabel();
+
+        vmWriter.writeLabel(topLabel);
+
         compileWrappedExpression();
+
+        vmWriter.writeArithmetic(Command.NOT);
+        vmWriter.writeIf(continueLabel);
+
         compileWrappedStatements();
+
+        vmWriter.writeGoto(topLabel);
+        vmWriter.writeLabel(continueLabel);
     }
 
     private void compileReturn(){
@@ -613,14 +678,28 @@ public class CompilationEngine {
         }
 
         if(match.group("value").equals(";")){
+            vmWriter.writePush(Segment.CONST, 0);
             compiledTokens.add(currToken);
             compilationPointer++;
         }
+
+        vmWriter.writeReturn();
     }
 
     private void compileIf(){
+
+        String elseLabel = generateLabel();
+        String endLabel = generateLabel();
+
         compileWrappedExpression();
+
+        vmWriter.writeArithmetic(Command.NOT);
+        vmWriter.writeIf(elseLabel);
+
         compileWrappedStatements();
+
+        vmWriter.writeGoto(endLabel);
+        vmWriter.writeGoto(elseLabel);
 
         Token currToken = tokens.get(compilationPointer);
         Matcher match = getMatch(currToken);
@@ -634,6 +713,7 @@ public class CompilationEngine {
                 compileWrappedStatements();
         }
 
+        vmWriter.writeLabel(endLabel);
     }
 
     private void compileExpression(){
@@ -672,6 +752,9 @@ public class CompilationEngine {
 
             if (operator){
                 compileTerm();
+
+                vmWriter.writeCommand(match.group("value"));
+
                 compiledTokens.add(new Token(NonTerminal.term, true));
                 operator = false;
             } else {
@@ -712,7 +795,21 @@ public class CompilationEngine {
 
             if(canKnow & !isCall){ // Variable
                 compilationPointer = brIndex;
-                compileVariableOrIndexing();
+                String[] varIdentifier = compileVariableOrIndexing(false);
+                String varName = varIdentifier[0];
+                boolean isIndex = Boolean.valueOf(varIdentifier[1]);
+
+                if(isIndex){
+                    vmWriter.writePop(Segment.POINTER, 1);
+                    vmWriter.writePush(Segment.THAT, 0);
+                }
+
+                if (!isIndex){
+                    vmWriter.writePush(
+                        Segment.fromIdentifer(symbolTable.kindOf(varName)),
+                        symbolTable.indexOf(varName));
+                }
+
                 compilationPointer--;
                 return;
             }
@@ -726,7 +823,24 @@ public class CompilationEngine {
             // String or Int constant
             switch (match.group("type")){
                 case "stringConstant":
+                    String strVal = currToken.getStringVal();
+                    vmWriter.writePush(
+                        Segment.CONST,
+                        strVal.length()
+                    );
+                    vmWriter.writeCall("String.new", 1);
+                    compiledTokens.add(currToken);
+
+                    for(int i = 0; i < strVal.length(); i++){
+                        vmWriter.writePush(
+                            Segment.CONST, (int) strVal.charAt(i)
+                        );
+                        vmWriter.writeCall("String.appendChar", 2);
+                    }
+                    return;
+
                 case "integerConstant":
+                    vmWriter.writePush(Segment.CONST, currToken.getIntVal());
                     compiledTokens.add(currToken);
                     return;
             }
@@ -734,9 +848,19 @@ public class CompilationEngine {
             // Keyword Constant
             switch (match.group("value")){
                 case "true":
+                    vmWriter.writePush(Segment.CONST, 0);
+                    vmWriter.writeArithmetic(Command.NOT);
+                    compiledTokens.add(currToken);
+                    return;
+
                 case "false":
                 case "null":
+                    vmWriter.writePush(Segment.CONST, 0);
+                    compiledTokens.add(currToken);
+                    return;
+
                 case "this":
+                    vmWriter.writePush(Segment.CONST, 0);
                     compiledTokens.add(currToken);
                     return;
             }
@@ -747,9 +871,18 @@ public class CompilationEngine {
                 (match.group("value").equals("-") |
                  match.group("value").equals("~"))
                 ){
+                    compileTerm();
+
+                    switch (match.group("value")){
+                        case "-":
+                            vmWriter.writeArithmetic(Command.NEG);
+                            break;
+                        case "~":
+                            vmWriter.writeArithmetic(Command.NOT);
+                            break;
+                    }
 
                     compiledTokens.add(currToken);
-                    compileTerm();
                     compiledTokens.add(new Token(NonTerminal.term, true));
                     return;
             }
@@ -769,7 +902,7 @@ public class CompilationEngine {
         }
     }
 
-    private void compileExpressionList(){
+    private int compileExpressionList(){
         Matcher match;
         Token currToken;
         boolean validExpressions = true;
@@ -779,6 +912,7 @@ public class CompilationEngine {
         compilationPointer--;
         compileExpression();
         compilationPointer--;
+        int numArgs = 0;
         while (compilationPointer < numTokens){
 
             currToken = tokens.get(compilationPointer++);
@@ -800,6 +934,7 @@ public class CompilationEngine {
             if (!validExpressions){
                 compilationPointer--;
                 compileExpression();
+                numArgs++;
                 compilationPointer--;
                 validExpressions = true;
                 continue;
@@ -818,6 +953,8 @@ public class CompilationEngine {
             }
         }
         compiledTokens.add(new Token(NonTerminal.expressionList, true));
+
+        return numArgs;
     }
 
     private void compileSubroutineCall(){
@@ -834,6 +971,7 @@ public class CompilationEngine {
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
 
+            // name
             if (match.group("type").equals("identifier")){
                 if(possibleName != null){
                     throw new RuntimeException("Duplicate name");
@@ -842,6 +980,7 @@ public class CompilationEngine {
                 continue;
             }
 
+            // .
             if (possibleName != null){
                 if (
                     match.group("type").equals("symbol") &
@@ -857,6 +996,7 @@ public class CompilationEngine {
             }
         }
 
+        String subroutineName = "";
         // subroutineName(expressionList)
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
@@ -867,6 +1007,7 @@ public class CompilationEngine {
                 if(nameFound){
                     throw new RuntimeException("Duplicate name");
                 }
+                subroutineName = match.group("value");
                 compiledTokens.add(currToken);
                 nameFound = true;
                 continue;
@@ -877,6 +1018,7 @@ public class CompilationEngine {
                 match.group("type").equals("symbol") &
                 match.group("value").equals("(")
                 ){
+                    // vmWriter.writePush(Segment.POINTER, 0);
                     compiledTokens.add(currToken);
                     openPar = true;
             }
@@ -898,11 +1040,23 @@ public class CompilationEngine {
                         compiledTokens.add(
                             new Token(NonTerminal.expressionList, true)
                         );
+
+                        if(possibleName != null){
+                            vmWriter.writeCall(
+                                possibleName.getIdentifier() + "." +
+                                subroutineName, 0
+                            );
+                        } else {
+                            vmWriter.writeCall(
+                                className + "." + subroutineName, 0
+                            );
+                        }
+
                         compiledTokens.add(currToken);
                         break;
                 }
 
-                compileExpressionList();
+                int numArgs = compileExpressionList() + 1;
                 currToken = tokens.get(compilationPointer++);
                 match = getMatch(currToken);
                 // )
@@ -910,18 +1064,31 @@ public class CompilationEngine {
                     match.group("type").equals("symbol") &
                     match.group("value").equals(")")
                     ){
+                        if(possibleName != null){
+                            vmWriter.writeCall(
+                                possibleName.getIdentifier() + "." +
+                                subroutineName, numArgs
+                            );
+                        } else {
+                            vmWriter.writeCall(
+                                className + "." + subroutineName, numArgs
+                            );
+                        }
                         compiledTokens.add(currToken);
                         break;
                 }
+
             }
         }
     }
 
-    private void compileVariableOrIndexing(){
+    private String[] compileVariableOrIndexing(boolean isLet){
         Matcher match;
         Token currToken;
         boolean varNameFound = false;
         boolean openIndex = false;
+        boolean isIndex = false;
+        String varName = "";
         while (compilationPointer < numTokens){
             currToken = tokens.get(compilationPointer++);
             match = getMatch(currToken);
@@ -935,6 +1102,8 @@ public class CompilationEngine {
 
                 compiledTokens.add(currToken);
                 varNameFound = true;
+                varName = match.group("value");
+
                 continue;
             }
 
@@ -963,6 +1132,11 @@ public class CompilationEngine {
                     throw new RuntimeException("No variable to index");
                 }
 
+                vmWriter.writePush(
+                    Segment.fromIdentifer(symbolTable.kindOf(varName)),
+                    symbolTable.indexOf(varName)
+                );
+
                 compileExpression();
                 compilationPointer--;
 
@@ -980,6 +1154,10 @@ public class CompilationEngine {
                     openIndex = false;
                 }
 
+                vmWriter.writeArithmetic(Command.ADD);
+
+                isIndex = true;
+
                 break;
             }
 
@@ -987,6 +1165,8 @@ public class CompilationEngine {
                 break;
             }
         }
+
+        return new String[]{varName, String.valueOf(isIndex)};
     }
 
     private void compileWrappedExpression(){
@@ -1084,6 +1264,9 @@ public class CompilationEngine {
         return match;
     }
 
+    private String generateLabel(){
+        return "LABEL_" + (labelIndex++);
+    }
 
     public List<Token> getTokens(){
         return this.compiledTokens;

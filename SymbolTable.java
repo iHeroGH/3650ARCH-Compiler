@@ -15,7 +15,7 @@ public class SymbolTable {
     }
 
     public void startSubRoutine(){
-        if (subroutineScope.size() != 0) System.out.println(subroutineScopeString());
+        // if (subroutineScope.size() != 0) System.out.println(subroutineScopeString());
         subroutineScope.clear();
     }
 

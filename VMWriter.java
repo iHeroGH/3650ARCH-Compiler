@@ -64,7 +64,41 @@ public class VMWriter {
         writeCommand("return");
     }
 
+    public void writeComment(String comment){
+        writer.write("//" + comment + "\n");
+    }
+
     public void writeCommand(String command){
+        switch(command){
+            case "+":
+                command = "add";
+                break;
+            case "-":
+                command = "sub";
+                break;
+            case "*":
+                command = "call Math.multiply 2";
+                break;
+            case "/":
+                command = "call Math.divide 2";
+                break;
+            case "&amp;":
+                command = "and";
+                break;
+            case "|":
+                command = "or";
+                break;
+            case "&lt;":
+                command = "lt";
+                break;
+            case "&gt;":
+                command = "gt";
+                break;
+            case "=":
+                command = "eq";
+                break;
+        }
+
         writeCommand(command, "", "");
     }
 
@@ -73,6 +107,7 @@ public class VMWriter {
     }
 
     public void writeCommand(String command, String arg1, String arg2){
+        // System.out.println(command + " " + arg1 + " " + arg2);
         writer.write(command + " " + arg1 + " " + arg2 + "\n");
     }
 
@@ -106,6 +141,21 @@ enum Segment{
                 return "temp";
             default:
                 throw new RuntimeException("Unknown Segment " + this.name());
+        }
+    }
+
+    public static Segment fromIdentifer(Identifier identifier){
+        switch(identifier){
+            case ARG:
+                return Segment.ARG;
+            case FIELD:
+                return Segment.THIS;
+            case STATIC:
+                return Segment.STATIC;
+            case VAR:
+                return Segment.LOCAL;
+            default:
+                throw new RuntimeException("Unknown Identifer " + identifier);
         }
     }
 }
