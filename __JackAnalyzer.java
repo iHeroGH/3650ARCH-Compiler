@@ -5,17 +5,20 @@ public class __JackAnalyzer {
 
     public static void main(String[] args){
 
-        String filePath = "11\\ConvertToBin\\Main.jack";
+        String filePath = "Square\\Square.jack";
         JackTokenizer tokenizer = new JackTokenizer(filePath);
 
         CompilationEngine compiler = new CompilationEngine(tokenizer);
-        writeToFile(compiler);
+        writeToFile(compiler, filePath);
 
     }
 
-    public static void writeToFile(CompilationEngine compiler){
+    public static void writeToFile(CompilationEngine compiler, String filePath){
+        String outputPath = filePath.replaceAll(
+            "\\.jack", ".gen.xml"
+        );
         try {
-            PrintWriter writer = new PrintWriter("a.xml");
+            PrintWriter writer = new PrintWriter(outputPath);
             // Write all the data from the contents list to the file
             for(Token token : compiler.getTokens()){
                 writer.println(token.toString());

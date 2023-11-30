@@ -8,13 +8,6 @@
 /** Computes the average of a sequence of integers. */
 class Main {
 
-	static int nAccounts;
-	static int bankCommission;
-
-	field int id;
-	field String owner;
-	field int balance;
-
     function void main() {
         var Array a;
         var int length;
@@ -43,10 +36,4 @@ class Main {
 
 		return;
     }
-
-	method void transfer(int sum, BankAccount from, Date when){
-		var int i, j;
-		var Date due;
-		let balance = (balance + sum) - comission(sum * 5);
-	}
 }
